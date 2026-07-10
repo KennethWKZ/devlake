@@ -1,0 +1,140 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Native single-arch build variant of ./Dockerfile.
+#
+# The default ./Dockerfile cross-compiles both amd64 and arm64 from one build
+# host, which requires QEMU/binfmt emulation for the non-native arch (the
+# pinned `FROM --platform=linux/amd64` sysroot stage). This variant compiles
+# natively for the build host's architecture only: build on an arm64 host to
+# get an arm64 image. No foreign sysroot, no cross toolchain, no emulation.
+
+FROM golang:1.26-bookworm AS builder
+
+# docker build --build-arg GOPROXY=https://goproxy.io,direct -t mericodev/lake .
+ARG GOPROXY=
+# docker build --build-arg HTTPS_PROXY=http://localhost:4780 -t mericodev/lake .
+ARG HTTP_PROXY=
+ARG HTTPS_PROXY=
+
+RUN apt-get update
+RUN apt-get install -y gcc binutils libfindbin-libs-perl cmake libssh2-1-dev libssl-dev zlib1g-dev
+
+RUN go install github.com/vektra/mockery/v2@v2.53.6
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.1
+
+# Build libgit2 natively for the build host's architecture.
+RUN mkdir -p /tmp/build && cd /tmp/build && \
+    wget https://github.com/libgit2/libgit2/archive/refs/tags/v1.3.0.tar.gz -O - | tar -xz && \
+    cd libgit2-1.3.0 && \
+    mkdir build && cd build && \
+    cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_INSTALL_PREFIX=/usr/local/deps/target && \
+    make -j install
+
+
+FROM builder AS build
+
+WORKDIR /app
+COPY . /app
+ENV GOBIN=/app/bin
+
+ARG TAG=
+ARG SHA=
+ARG GO_PLUGINS=
+
+# Native compile: CGO on, default host gcc/GOARCH.
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    export PKG_CONFIG_PATH=/usr/local/deps/target/lib/pkgconfig && \
+    export CGO_ENABLED=1 && \
+    DEVLAKE_PLUGINS="$GO_PLUGINS" make all
+
+# remove symlink in lib, we will recreate in final image
+RUN cd /usr/local/deps/target/lib && \
+    for file in *.so* ; do \
+        if [ -L $file ] ; then \
+            unlink $file ; \
+        fi \
+    done
+
+
+FROM python:3.9-slim-bookworm AS base
+
+RUN apt-get update && \
+    apt-get install -y python3-dev python3-pip tar pkg-config curl libssh2-1 zlib1g libffi-dev default-libmysqlclient-dev libpq-dev tini git openssh-client corkscrew && \
+    apt-get clean && \
+    rm -fr /usr/share/doc/* \
+           /usr/share/info/* \
+           /usr/share/linda/* \
+           /usr/share/lintian/overrides/* \
+           /usr/share/locale/* \
+           /usr/share/man/* \
+           /usr/share/doc/kde/HTML/* \
+           /usr/share/gnome/help/* \
+           /usr/share/locale/* \
+           /usr/share/omf/*/*-*.emf \
+           /var/lib/apt/lists/*
+
+EXPOSE 8080
+
+RUN useradd -ms /bin/bash -d /app devlake -u 1010
+RUN chown -R devlake:devlake /etc/ssl/certs
+USER devlake
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN mkdir logs
+VOLUME /app/logs
+
+# Setup Python
+COPY --chown=devlake:devlake python/ /app/python/
+RUN python3 -m pip install --no-cache --upgrade pip setuptools && \
+    python3 -m pip install --no-cache -r python/requirements.txt && \
+    python3 -m pip install --upgrade pip
+
+# Setup Python package manager
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_UNMANAGED_INSTALL=/app/.local/bin sh
+ENV PATH="/app/.local/bin:${PATH}"
+
+# Build Python plugins, make sure the scripts has execute permission
+# RUN find /app/python/ -name "*.sh" | xargs -I{} chmod +x {}
+RUN /app/python/build.sh
+
+FROM base AS devlake-base
+ARG DEBUG=
+
+# libraries
+ENV LD_LIBRARY_PATH=/app/libs
+RUN mkdir -p /app/libs
+COPY --from=build /usr/local/deps/target/lib/*.so* /app/libs
+COPY --from=build /go/bin /usr/bin
+RUN ldconfig -vn /app/libs
+
+# apps
+COPY --from=build /app/bin /app/bin
+COPY --from=build /app/resources /app/resources
+
+ENV PATH="/app/bin:${PATH}"
+ENV DEBUG="$DEBUG"
+
+USER root
+RUN chgrp -R 0 /app && \
+    chmod -R g=u /app
+USER devlake
+
+#add tini, prevent zombie process
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+CMD ["lake"]
