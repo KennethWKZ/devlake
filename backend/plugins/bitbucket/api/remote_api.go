@@ -67,13 +67,14 @@ func listBitbucketWorkspaces(
 	err errors.Error,
 ) {
 	var res *http.Response
-	// /user/permissions/workspaces was removed by Bitbucket CHANGE-2770; /workspaces
-	// lists the current user's workspaces and is the supported replacement.
+	// /user/permissions/workspaces was removed and /workspaces deprecated by
+	// Bitbucket CHANGE-2770; /user/workspaces lists the current user's workspaces
+	// and is the supported replacement.
 	res, err = apiClient.Get(
-		"/workspaces",
+		"/user/workspaces",
 		url.Values{
-			"sort":    {"slug"},
-			"fields":  {"values.slug,values.name,pagelen,page,size"},
+			"sort":    {"workspace.slug"},
+			"fields":  {"values.workspace.slug,values.workspace.name,pagelen,page,size"},
 			"page":    {fmt.Sprintf("%v", page.Page)},
 			"pagelen": {fmt.Sprintf("%v", page.PageLen)},
 		},
@@ -100,9 +101,9 @@ func listBitbucketWorkspaces(
 	for _, r := range resBody.Values {
 		children = append(children, dsmodels.DsRemoteApiScopeListEntry[models.BitbucketRepo]{
 			Type:     api.RAS_ENTRY_TYPE_GROUP,
-			Id:       r.Slug,
-			Name:     r.Name,
-			FullName: r.Name,
+			Id:       r.GroupId(),
+			Name:     r.GroupName(),
+			FullName: r.GroupName(),
 		})
 	}
 	return
@@ -212,15 +213,15 @@ func searchBitbucketRepos(
 }
 
 // listAllBitbucketWorkspaces returns every workspace slug accessible to the
-// authenticated user, following pagination of GET /2.0/workspaces.
+// authenticated user, following pagination of GET /2.0/user/workspaces.
 func listAllBitbucketWorkspaces(apiClient plugin.ApiClient) ([]string, errors.Error) {
 	var slugs []string
 	for page := 1; ; page++ {
 		res, err := apiClient.Get(
-			"/workspaces",
+			"/user/workspaces",
 			url.Values{
-				"sort":    {"slug"},
-				"fields":  {"values.slug,pagelen,page,size"},
+				"sort":    {"workspace.slug"},
+				"fields":  {"values.workspace.slug,pagelen,page,size"},
 				"page":    {fmt.Sprintf("%v", page)},
 				"pagelen": {"100"},
 			},
@@ -234,7 +235,7 @@ func listAllBitbucketWorkspaces(apiClient plugin.ApiClient) ([]string, errors.Er
 			return nil, err
 		}
 		for _, w := range resBody.Values {
-			slugs = append(slugs, w.Slug)
+			slugs = append(slugs, w.GroupId())
 		}
 		if len(resBody.Values) == 0 || page*resBody.Pagelen >= resBody.Size {
 			break

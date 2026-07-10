@@ -117,20 +117,25 @@ type WorkspaceResponse struct {
 	Values  []GroupResponse `json:"values"`
 }
 
-// GroupResponse maps an entry from GET /2.0/workspaces. The cross-workspace
-// GET /2.0/user/permissions/workspaces was removed by Bitbucket CHANGE-2770,
-// so slug/name now live at the top level instead of under a nested workspace.
+// GroupResponse maps an entry from GET /2.0/user/workspaces, the supported
+// replacement after Bitbucket CHANGE-2770 removed the cross-workspace
+// GET /2.0/user/permissions/workspaces and deprecated GET /2.0/workspaces.
+// Each value nests the workspace slug/name under a "workspace" object.
 type GroupResponse struct {
+	Workspace WorkspaceItem `json:"workspace"`
+}
+
+type WorkspaceItem struct {
 	Slug string `json:"slug" group:"id"`
 	Name string `json:"name" group:"name"`
 }
 
 func (p GroupResponse) GroupId() string {
-	return p.Slug
+	return p.Workspace.Slug
 }
 
 func (p GroupResponse) GroupName() string {
-	return p.Name
+	return p.Workspace.Name
 }
 
 type ReposResponse struct {
