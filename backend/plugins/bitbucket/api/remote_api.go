@@ -73,8 +73,9 @@ func listBitbucketWorkspaces(
 	res, err = apiClient.Get(
 		"/user/workspaces",
 		url.Values{
-			"sort":    {"workspace.slug"},
-			"fields":  {"values.workspace.slug,values.workspace.name,pagelen,page,size"},
+			// No sort/fields: /user/workspaces rejects sort=workspace.slug with
+			// HTTP 400 "Invalid field name". The bare call returns the nested
+			// workspace objects we need; WorkspaceResponse ignores extra fields.
 			"page":    {fmt.Sprintf("%v", page.Page)},
 			"pagelen": {fmt.Sprintf("%v", page.PageLen)},
 		},
@@ -220,8 +221,8 @@ func listAllBitbucketWorkspaces(apiClient plugin.ApiClient) ([]string, errors.Er
 		res, err := apiClient.Get(
 			"/user/workspaces",
 			url.Values{
-				"sort":    {"workspace.slug"},
-				"fields":  {"values.workspace.slug,pagelen,page,size"},
+				// No sort/fields (see listBitbucketWorkspaces): /user/workspaces
+				// returns 400 on sort=workspace.slug.
 				"page":    {fmt.Sprintf("%v", page)},
 				"pagelen": {"100"},
 			},
