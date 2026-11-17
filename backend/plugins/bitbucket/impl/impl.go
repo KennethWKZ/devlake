@@ -175,6 +175,9 @@ func (p Bitbucket) PrepareTaskData(taskCtx plugin.TaskContext, options map[strin
 	if err := regexEnricher.TryAdd(devops.ENV_NAME_PATTERN, op.EnvNamePattern); err != nil {
 		return nil, errors.BadInput.Wrap(err, "invalid value for `envNamePattern`")
 	}
+	if err := regexEnricher.TryAdd(tasks.BOT_NAME_PATTERN, op.BotNamePattern); err != nil {
+		return nil, errors.BadInput.Wrap(err, "invalid value for `botNamePattern`")
+	}
 	taskData := &tasks.BitbucketTaskData{
 		Options:       op,
 		ApiClient:     apiClient,
