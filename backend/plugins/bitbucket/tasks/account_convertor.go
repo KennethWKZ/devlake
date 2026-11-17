@@ -32,6 +32,9 @@ import (
 
 const RAW_ACCOUNT_TABLE = "bitbucket_api_accounts"
 
+// BOT_NAME_PATTERN is the regex enricher key for the scope config's botNamePattern.
+const BOT_NAME_PATTERN = "botNamePattern"
+
 var ConvertAccountsMeta = plugin.SubTaskMeta{
 	Name:             "Convert Users",
 	EntryPoint:       ConvertAccounts,
@@ -64,6 +67,11 @@ func ConvertAccounts(taskCtx plugin.SubTaskContext) errors.Error {
 				UserName:     bitbucketUser.UserName,
 				FullName:     bitbucketUser.DisplayName,
 				AvatarUrl:    bitbucketUser.AvatarUrl,
+				// Bitbucket reports app bots that post through an ordinary account
+				// (e.g. a review bot) as type "user", so botNamePattern names them.
+				IsBot: data.RegexEnricher != nil &&
+					(data.RegexEnricher.ReturnNameIfMatched(BOT_NAME_PATTERN, bitbucketUser.DisplayName) != "" ||
+						data.RegexEnricher.ReturnNameIfMatched(BOT_NAME_PATTERN, bitbucketUser.UserName) != ""),
 			}
 			return []interface{}{
 				domainUser,

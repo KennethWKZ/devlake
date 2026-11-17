@@ -30,7 +30,12 @@ type BitbucketScopeConfig struct {
 	// environment name matches, e.g. `(?i)^prod(uction)?(-.+)?$` for
 	// per-region environments such as Production-MY. Empty keeps the
 	// environment name as Bitbucket reports it.
-	EnvNamePattern string            `mapstructure:"envNamePattern,omitempty" json:"envNamePattern" gorm:"type:varchar(255)"`
+	EnvNamePattern string `mapstructure:"envNamePattern,omitempty" json:"envNamePattern" gorm:"type:varchar(255)"`
+	// BotNamePattern marks a Bitbucket account as a bot when its display
+	// name or user name matches, e.g. `(?i)^dev bot$` for a review bot that
+	// posts through an ordinary user. DORA then ignores its PR comments when
+	// it looks for the first review. Empty marks no account as a bot.
+	BotNamePattern string            `mapstructure:"botNamePattern,omitempty" json:"botNamePattern" gorm:"type:varchar(255)"`
 	Refdiff        datatypes.JSONMap `mapstructure:"refdiff,omitempty" json:"refdiff" swaggertype:"object" format:"json"`
 
 	// a string array, split by `,`.
