@@ -27,6 +27,7 @@
 #   AWS_PROFILE          AWS CLI profile             (default: default)
 #   AWS_REGION           ECR region                  (default: profile's region)
 #   TAG                  image tag                   (default: git short SHA)
+#   PUSH_LATEST          also push :latest           (default: 1)
 #   DOCKER_DEFAULT_PLATFORM  target arch for images  (default: linux/arm64)
 #   SERVER_REPO / UI_REPO / DASHBOARD_REPO   ECR repo names
 #
@@ -124,11 +125,19 @@ make build-config-ui-image build-grafana-image IMAGE_REPO="${REGISTRY}" TAG="${T
 # --- push -------------------------------------------------------------------
 # Own push loop (the Makefile push-grafana-image target has an indentation bug,
 # and pushing here keeps repo->image mapping explicit).
+# Each image goes up twice: the immutable ${TAG} (hosts pin this, and it is
+# the rollback point) and the moving `latest` (skip with PUSH_LATEST=0).
+PUSH_LATEST="${PUSH_LATEST:-1}"
 push_image() {
   local repo="$1"
   local ref="${REGISTRY}/${repo}:${TAG}"
   log "pushing ${ref}"
   docker push "${ref}"
+  if [ "${PUSH_LATEST}" = "1" ] && [ "${TAG}" != "latest" ]; then
+    docker tag "${ref}" "${REGISTRY}/${repo}:latest"
+    log "pushing ${REGISTRY}/${repo}:latest"
+    docker push "${REGISTRY}/${repo}:latest"
+  fi
 }
 push_image "${SERVER_REPO}"
 push_image "${UI_REPO}"
