@@ -299,6 +299,22 @@ const renderCollapseItems = ({
             />
             for calculation
           </div>
+          <p style={{ marginTop: 16 }}>
+            Treat accounts whose name matches
+            <Input
+              style={{ margin: '0 8px', width: 200 }}
+              placeholder="(?i)^dev bot$"
+              value={transformation.botNamePattern ?? ''}
+              onChange={(e) =>
+                onChangeTransformation({
+                  ...transformation,
+                  botNamePattern: e.target.value,
+                })
+              }
+            />
+            as bots
+            <HelpTooltip content="A review bot that posts through an ordinary Bitbucket account. Its pull request comments do not count as the first review in PR pickup and review times." />
+          </p>
         </>
       ),
     },

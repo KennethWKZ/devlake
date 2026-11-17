@@ -73,6 +73,7 @@ export const BitbucketConfig: IPluginConfig = {
       issueStatusDone: 'closed',
       issueStatusOther: 'on hold,wontfix,duplicate,invalid',
       envNamePattern: '(?i)^prod(uction)?(-.+)?$',
+      botNamePattern: '',
       deploymentPattern: '',
       productionPattern: '',
       refdiff: {

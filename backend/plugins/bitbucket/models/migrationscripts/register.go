@@ -45,5 +45,6 @@ func All() []plugin.MigrationScript {
 		new(addApiTokenAuth),
 		new(addPrReviewerTable),
 		new(addEnvNamePattern),
+		new(addBotNamePattern),
 	}
 }
