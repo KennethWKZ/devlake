@@ -24,9 +24,14 @@ import (
 
 type BitbucketScopeConfig struct {
 	common.ScopeConfig `mapstructure:",squash" json:",inline" gorm:"embedded"`
-	DeploymentPattern  string            `mapstructure:"deploymentPattern,omitempty" json:"deploymentPattern" gorm:"type:varchar(255)"`
-	ProductionPattern  string            `mapstructure:"productionPattern,omitempty" json:"productionPattern" gorm:"type:varchar(255)"`
-	Refdiff            datatypes.JSONMap `mapstructure:"refdiff,omitempty" json:"refdiff" swaggertype:"object" format:"json"`
+	DeploymentPattern  string `mapstructure:"deploymentPattern,omitempty" json:"deploymentPattern" gorm:"type:varchar(255)"`
+	ProductionPattern  string `mapstructure:"productionPattern,omitempty" json:"productionPattern" gorm:"type:varchar(255)"`
+	// EnvNamePattern marks a Bitbucket deployment as PRODUCTION when its
+	// environment name matches, e.g. `(?i)^prod(uction)?(-.+)?$` for
+	// per-region environments such as Production-MY. Empty keeps the
+	// environment name as Bitbucket reports it.
+	EnvNamePattern string            `mapstructure:"envNamePattern,omitempty" json:"envNamePattern" gorm:"type:varchar(255)"`
+	Refdiff        datatypes.JSONMap `mapstructure:"refdiff,omitempty" json:"refdiff" swaggertype:"object" format:"json"`
 
 	// a string array, split by `,`.
 	IssueStatusTodo       string `mapstructure:"issueStatusTodo,omitempty" json:"issueStatusTodo" gorm:"type:varchar(255)"`

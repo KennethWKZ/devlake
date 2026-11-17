@@ -126,6 +126,14 @@ func ConvertDeployments(taskCtx plugin.SubTaskContext) errors.Error {
 				// So convert it to DevLake's definition.
 				domainDeployCommit.Environment = devops.TESTING
 			}
+			// Bitbucket environment names are free text (e.g. Production-MY,
+			// Prod); envNamePattern maps the ones that are production to
+			// DevLake's PRODUCTION so DORA counts them. OriginalEnvironment
+			// keeps the name as Bitbucket reports it.
+			if data.RegexEnricher != nil &&
+				data.RegexEnricher.ReturnNameIfMatched(devops.ENV_NAME_PATTERN, bitbucketDeployment.Environment) != "" {
+				domainDeployCommit.Environment = devops.PRODUCTION
+			}
 
 			domainDeployCommit.CicdDeploymentId = domainDeployCommit.Id
 			return []interface{}{domainDeployCommit, domainDeployCommit.ToDeployment()}, nil
