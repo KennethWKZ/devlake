@@ -44,5 +44,6 @@ func All() []plugin.MigrationScript {
 		new(changeIssueComponentType),
 		new(addApiTokenAuth),
 		new(addPrReviewerTable),
+		new(addEnvNamePattern),
 	}
 }

@@ -201,6 +201,21 @@ const renderCollapseItems = ({
             <span>Convert a Bitbucket Deployment to a DevLake Deployment</span>
             <HelpTooltip content={<img src={ExampleJpg} alt="" width={400} />} />
           </Checkbox>
+          <div style={{ margin: '8px 0', paddingLeft: 28 }}>
+            <span>If its environment name matches</span>
+            <Input
+              style={{ width: 180, margin: '0 8px' }}
+              placeholder="(?i)^prod(uction)?(-.+)?$"
+              value={transformation.envNamePattern ?? ''}
+              onChange={(e) =>
+                onChangeTransformation({
+                  ...transformation,
+                  envNamePattern: e.target.value,
+                })
+              }
+            />
+            <span>, this deployment is a ‘Production Deployment’</span>
+          </div>
           <Checkbox checked={useCustom} onChange={onChangeUseCustom}>
             Convert a Bitbucket Pipeline to a DevLake Deployment when its branch/tag name
           </Checkbox>
