@@ -1,0 +1,813 @@
+{
+ "uid": "mm-devex",
+ "title": "MoneyMatch DevEx",
+ "tags": [
+  "moneymatch",
+  "dora",
+  "devex"
+ ],
+ "timezone": "Asia/Kuala_Lumpur",
+ "editable": true,
+ "graphTooltip": 1,
+ "refresh": "",
+ "time": {
+  "from": "now-90d",
+  "to": "now"
+ },
+ "timepicker": {},
+ "schemaVersion": 41,
+ "templating": {
+  "list": [
+   {
+    "name": "project",
+    "label": "Project",
+    "type": "query",
+    "datasource": {
+     "type": "mysql",
+     "uid": "devlake-mysql-api"
+    },
+    "query": "select distinct project_name from project_mapping order by 1",
+    "refresh": 1,
+    "current": {
+     "text": "moneymatch",
+     "value": "moneymatch"
+    },
+    "multi": false,
+    "includeAll": false
+   },
+   {
+    "name": "repo",
+    "label": "Repository",
+    "type": "query",
+    "datasource": {
+     "type": "mysql",
+     "uid": "devlake-mysql-api"
+    },
+    "query": "select substring_index(r.name, '/', -1) as __text, r.id as __value from repos r join project_mapping pm on pm.row_id = r.id and pm.`table` = 'repos' where pm.project_name in (${project:sqlstring}) order by 1",
+    "refresh": 1,
+    "multi": true,
+    "includeAll": true,
+    "current": {
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "sort": 0
+   },
+   {
+    "name": "author",
+    "label": "PR author",
+    "type": "query",
+    "datasource": {
+     "type": "mysql",
+     "uid": "devlake-mysql-api"
+    },
+    "description": "Filters the pull request panels and the lead time. Deployments and pipelines are not per author.",
+    "query": "select max(pr.author_name) as __text, pr.author_id as __value from pull_requests pr join project_mapping pm on pm.row_id = pr.base_repo_id and pm.`table` = 'repos' where pm.project_name in (${project:sqlstring}) and pr.created_date >= date_sub(utc_timestamp(), interval 1 year) and pr.author_id <> '' group by pr.author_id order by 1",
+    "refresh": 1,
+    "multi": true,
+    "includeAll": true,
+    "current": {
+     "text": [
+      "All"
+     ],
+     "value": [
+      "$__all"
+     ]
+    },
+    "sort": 0
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "stat",
+   "title": "Deploy days a week",
+   "description": "Average number of days a week with at least one successful production deployment (Malaysia time). DORA deployment frequency. Elite: on demand, several a day.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with _d as (\n  select cdc.cicd_deployment_id as id, max(cdc.finished_date) as fin,\n         max(cdc.original_environment) as env, max(cdc.cicd_scope_id) as scope\n  from cicd_deployment_commits cdc\n  join project_mapping pm on cdc.cicd_scope_id = pm.row_id and pm.`table` = 'cicd_scopes'\n  where pm.project_name in (${project:sqlstring}) and cdc.cicd_scope_id in (${repo:sqlstring})\n    and cdc.result = 'SUCCESS' and cdc.environment = 'PRODUCTION'\n  group by 1\n  having $__timeFilter(max(cdc.finished_date))\n)\nselect round(count(distinct date(date_add(fin, interval 8 hour))) / greatest(timestampdiff(day, $__timeFrom(), $__timeTo()) / 7, 1), 1) as value from _d"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     },
+     "decimals": 1
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "showPercentChange": false,
+    "wideLayout": true
+   }
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "Production deploys",
+   "description": "Successful production deployments in the range. Each region and worker deployment counts once (a release to MY, AU, SG, NZ and BN is five).",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 6,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with _d as (\n  select cdc.cicd_deployment_id as id, max(cdc.finished_date) as fin,\n         max(cdc.original_environment) as env, max(cdc.cicd_scope_id) as scope\n  from cicd_deployment_commits cdc\n  join project_mapping pm on cdc.cicd_scope_id = pm.row_id and pm.`table` = 'cicd_scopes'\n  where pm.project_name in (${project:sqlstring}) and cdc.cicd_scope_id in (${repo:sqlstring})\n    and cdc.result = 'SUCCESS' and cdc.environment = 'PRODUCTION'\n  group by 1\n  having $__timeFilter(max(cdc.finished_date))\n) select count(*) as value from _d"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "showPercentChange": false,
+    "wideLayout": true
+   }
+  },
+  {
+   "id": 3,
+   "type": "stat",
+   "title": "Lead time for changes",
+   "description": "Median time from a pull request's first commit to its production deployment, for pull requests deployed in the range. DORA lead time for changes.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with _p as (\n  select distinct pr.id, pr.base_repo_id as repo, ppm.pr_cycle_time, ppm.pr_coding_time, ppm.pr_pickup_time,\n         ppm.pr_review_time, ppm.pr_deploy_time, timestampdiff(minute, pr.created_date, pr.merged_date) as pr_open_time,\n         cdc.finished_date as fin\n  from pull_requests pr\n  join project_pr_metrics ppm on ppm.id = pr.id\n  join project_mapping pm on pr.base_repo_id = pm.row_id and pm.`table` = 'repos'\n  join cicd_deployment_commits cdc on ppm.deployment_commit_id = cdc.id\n  where pm.project_name in (${project:sqlstring}) and pr.base_repo_id in (${repo:sqlstring}) and pr.author_id in (${author:sqlstring})\n    and pr.merged_date is not null and ppm.pr_cycle_time is not null\n    and $__timeFilter(cdc.finished_date)\n),\n_r as (select pr_cycle_time, percent_rank() over (order by pr_cycle_time) as rk from _p)\nselect max(pr_cycle_time) as value from _r where rk <= 0.5"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     },
+     "unit": "m",
+     "decimals": 1
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "showPercentChange": false,
+    "wideLayout": true
+   }
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Change failure rate",
+   "description": "Needs incidents. DevLake has none for this project yet, so change failure rate and recovery time are not measured. They are not zero.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 0,
+    "w": 6,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "select case when count(*) = 0 then 'Not measured' else concat(count(*), ' incidents') end as value\nfrom incidents i join project_mapping pm on pm.row_id = i.scope_id where pm.project_name in (${project:sqlstring})"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "text"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "/.*/",
+     "values": false
+    },
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "justifyMode": "center",
+    "orientation": "auto",
+    "showPercentChange": false,
+    "wideLayout": true
+   }
+  },
+  {
+   "id": 5,
+   "type": "barchart",
+   "title": "Production deploys per week",
+   "description": "Successful production deployments per complete week (Monday to Sunday, Malaysia time). The running week is left out until it ends.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 4,
+    "w": 16,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with recursive weeks(w) as (\n  select date_add(date_sub(date(date_add($__timeFrom(), interval 8 hour)), interval weekday(date_add($__timeFrom(), interval 8 hour)) day), interval if(weekday(date_add($__timeFrom(), interval 8 hour)) = 0 and time(date_add($__timeFrom(), interval 8 hour)) = '00:00:00', 0, 7) day)\n  union all\n  select date_add(w, interval 7 day) from weeks\n  where date_add(w, interval 7 day) <= date_sub(date_sub(date(date_add($__timeTo(), interval 8 hour)), interval weekday(date_add($__timeTo(), interval 8 hour)) day), interval 7 day)\n), _d as (\n  select cdc.cicd_deployment_id as id, max(cdc.finished_date) as fin,\n         max(cdc.original_environment) as env, max(cdc.cicd_scope_id) as scope\n  from cicd_deployment_commits cdc\n  join project_mapping pm on cdc.cicd_scope_id = pm.row_id and pm.`table` = 'cicd_scopes'\n  where pm.project_name in (${project:sqlstring}) and cdc.cicd_scope_id in (${repo:sqlstring})\n    and cdc.result = 'SUCCESS' and cdc.environment = 'PRODUCTION'\n  group by 1\n  having $__timeFilter(max(cdc.finished_date))\n)\nselect date_format(w, '%d %b') as week, count(_d.id) as Deploys\nfrom weeks left join _d on date_sub(date(date_add(_d.fin, interval 8 hour)), interval weekday(date_add(_d.fin, interval 8 hour)) day) = w\ngroup by w order by w"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 85,
+      "lineWidth": 0,
+      "gradientMode": "none",
+      "axisSoftMin": 0,
+      "axisPlacement": "auto"
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "vertical",
+    "stacking": "none",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 100,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xField": "week"
+   }
+  },
+  {
+   "id": 6,
+   "type": "barchart",
+   "title": "Deploys by environment",
+   "description": "Successful production deployments in the range, by Bitbucket environment name without its PRODUCTION- prefix (MY is PRODUCTION-MY). (pipeline) is a deployment found from a pipeline name.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 4,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with _d as (\n  select cdc.cicd_deployment_id as id, max(cdc.finished_date) as fin,\n         max(cdc.original_environment) as env, max(cdc.cicd_scope_id) as scope\n  from cicd_deployment_commits cdc\n  join project_mapping pm on cdc.cicd_scope_id = pm.row_id and pm.`table` = 'cicd_scopes'\n  where pm.project_name in (${project:sqlstring}) and cdc.cicd_scope_id in (${repo:sqlstring})\n    and cdc.result = 'SUCCESS' and cdc.environment = 'PRODUCTION'\n  group by 1\n  having $__timeFilter(max(cdc.finished_date))\n)\nselect coalesce(nullif(replace(env, 'PRODUCTION-', ''), ''), '(pipeline)') as environment, count(*) as Deploys\nfrom _d group by 1 order by 2 desc limit 12"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 85,
+      "lineWidth": 0,
+      "gradientMode": "none",
+      "axisSoftMin": 0,
+      "axisPlacement": "auto"
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "stacking": "none",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 100,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xField": "environment"
+   }
+  },
+  {
+   "id": 7,
+   "type": "barchart",
+   "title": "Where the lead time goes",
+   "description": "Share of each week's lead time spent in each stage (from the median hours of each stage), for pull requests deployed in each complete week: first commit to PR opened (coding), PR opened to merged (review and rework), merged to production deploy. Medians are per stage, so they do not add up to the lead time exactly. Review is not split further because the Bito bot comments on most PRs within seconds.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 12,
+    "w": 16,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with recursive weeks(w) as (\n  select date_add(date_sub(date(date_add($__timeFrom(), interval 8 hour)), interval weekday(date_add($__timeFrom(), interval 8 hour)) day), interval if(weekday(date_add($__timeFrom(), interval 8 hour)) = 0 and time(date_add($__timeFrom(), interval 8 hour)) = '00:00:00', 0, 7) day)\n  union all\n  select date_add(w, interval 7 day) from weeks\n  where date_add(w, interval 7 day) <= date_sub(date_sub(date(date_add($__timeTo(), interval 8 hour)), interval weekday(date_add($__timeTo(), interval 8 hour)) day), interval 7 day)\n), _p as (\n  select distinct pr.id, pr.base_repo_id as repo, ppm.pr_cycle_time, ppm.pr_coding_time, ppm.pr_pickup_time,\n         ppm.pr_review_time, ppm.pr_deploy_time, timestampdiff(minute, pr.created_date, pr.merged_date) as pr_open_time,\n         cdc.finished_date as fin\n  from pull_requests pr\n  join project_pr_metrics ppm on ppm.id = pr.id\n  join project_mapping pm on pr.base_repo_id = pm.row_id and pm.`table` = 'repos'\n  join cicd_deployment_commits cdc on ppm.deployment_commit_id = cdc.id\n  where pm.project_name in (${project:sqlstring}) and pr.base_repo_id in (${repo:sqlstring}) and pr.author_id in (${author:sqlstring})\n    and pr.merged_date is not null and ppm.pr_cycle_time is not null\n    and $__timeFilter(cdc.finished_date)\n),\n_s as (\n  select date_sub(date(date_add(fin, interval 8 hour)), interval weekday(date_add(fin, interval 8 hour)) day) as w, 'Coding' as stage, pr_coding_time as v from _p where pr_coding_time is not null\n  union all select date_sub(date(date_add(fin, interval 8 hour)), interval weekday(date_add(fin, interval 8 hour)) day) as w, 'Open, until merged' as stage, pr_open_time as v from _p where pr_open_time is not null\n  union all select date_sub(date(date_add(fin, interval 8 hour)), interval weekday(date_add(fin, interval 8 hour)) day) as w, 'Merged, until deployed' as stage, pr_deploy_time as v from _p where pr_deploy_time is not null\n),\n_r as (select w, stage, v, percent_rank() over (partition by w, stage order by v) as rk from _s),\n_n as (select w, stage, count(*) as n from _s group by w, stage),\nm as (select _r.w, _r.stage, if(max(_n.n) < 5, null, max(_r.v)) as med from _r\n      join _n on _n.w = _r.w and _n.stage = _r.stage where _r.rk <= 0.5 group by _r.w, _r.stage)\nselect date_format(weeks.w, '%d %b') as week,\n  round(100 * max(case when m.stage = 'Coding' then m.med end) / nullif(coalesce(max(case when m.stage = 'Coding' then m.med end), 0) + coalesce(max(case when m.stage = 'Open, until merged' then m.med end), 0) + coalesce(max(case when m.stage = 'Merged, until deployed' then m.med end), 0), 0)) as `Coding`,\n  round(100 * max(case when m.stage = 'Open, until merged' then m.med end) / nullif(coalesce(max(case when m.stage = 'Coding' then m.med end), 0) + coalesce(max(case when m.stage = 'Open, until merged' then m.med end), 0) + coalesce(max(case when m.stage = 'Merged, until deployed' then m.med end), 0), 0)) as `Open, until merged`,\n  round(100 * max(case when m.stage = 'Merged, until deployed' then m.med end) / nullif(coalesce(max(case when m.stage = 'Coding' then m.med end), 0) + coalesce(max(case when m.stage = 'Open, until merged' then m.med end), 0) + coalesce(max(case when m.stage = 'Merged, until deployed' then m.med end), 0), 0)) as `Merged, until deployed`\nfrom weeks left join m on m.w = weeks.w\ngroup by weeks.w order by weeks.w"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 85,
+      "lineWidth": 0,
+      "gradientMode": "none",
+      "axisSoftMin": 0,
+      "axisPlacement": "auto"
+     },
+     "unit": "percent",
+     "decimals": 0,
+     "max": 100
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "vertical",
+    "stacking": "normal",
+    "showValue": "never",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 100,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xField": "week"
+   }
+  },
+  {
+   "id": 8,
+   "type": "barchart",
+   "title": "Open pull requests by age",
+   "description": "Pull requests open right now, by days since they were opened. Not affected by the time range.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 12,
+    "w": 8,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "select b.bucket as age, count(pr.id) as `Open PRs`\nfrom (select 1 as k, 'Under 1 day' as bucket union all select 2, '1 to 3 days' union all select 3, '3 to 7 days'\n      union all select 4, '1 to 4 weeks' union all select 5, 'Over 4 weeks') b\nleft join (\n  select pr.id, case when timestampdiff(hour, pr.created_date, utc_timestamp()) < 24 then 1\n                     when timestampdiff(day, pr.created_date, utc_timestamp()) < 3 then 2\n                     when timestampdiff(day, pr.created_date, utc_timestamp()) < 7 then 3\n                     when timestampdiff(day, pr.created_date, utc_timestamp()) < 28 then 4 else 5 end as k\n  from pull_requests pr where pr.status = 'OPEN' and pr.author_id in (${author:sqlstring}) and pr.base_repo_id in (select r.id from repos r join project_mapping pm on pm.row_id = r.id and pm.`table` = 'repos'\n  where pm.project_name in (${project:sqlstring}) and r.id in (${repo:sqlstring}))\n) pr on pr.k = b.k\ngroup by b.k, b.bucket order by b.k"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 85,
+      "lineWidth": 0,
+      "gradientMode": "none",
+      "axisSoftMin": 0,
+      "axisPlacement": "auto"
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "vertical",
+    "stacking": "none",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 100,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xField": "age"
+   }
+  },
+  {
+   "id": 9,
+   "type": "barchart",
+   "title": "Pull requests opened and merged per week",
+   "description": "Pull requests opened and merged in each complete week (Malaysia time).",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 21,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with recursive weeks(w) as (\n  select date_add(date_sub(date(date_add($__timeFrom(), interval 8 hour)), interval weekday(date_add($__timeFrom(), interval 8 hour)) day), interval if(weekday(date_add($__timeFrom(), interval 8 hour)) = 0 and time(date_add($__timeFrom(), interval 8 hour)) = '00:00:00', 0, 7) day)\n  union all\n  select date_add(w, interval 7 day) from weeks\n  where date_add(w, interval 7 day) <= date_sub(date_sub(date(date_add($__timeTo(), interval 8 hour)), interval weekday(date_add($__timeTo(), interval 8 hour)) day), interval 7 day)\n),\n_pr as (select pr.created_date, pr.merged_date from pull_requests pr\n        where pr.author_id in (${author:sqlstring}) and pr.base_repo_id in (select r.id from repos r join project_mapping pm on pm.row_id = r.id and pm.`table` = 'repos'\n  where pm.project_name in (${project:sqlstring}) and r.id in (${repo:sqlstring})))\nselect date_format(w, '%d %b') as week,\n  (select count(*) from _pr where date_sub(date(date_add(_pr.created_date, interval 8 hour)), interval weekday(date_add(_pr.created_date, interval 8 hour)) day) = w) as Opened,\n  (select count(*) from _pr where _pr.merged_date is not null and date_sub(date(date_add(_pr.merged_date, interval 8 hour)), interval weekday(date_add(_pr.merged_date, interval 8 hour)) day) = w) as Merged\nfrom weeks order by w"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 85,
+      "lineWidth": 0,
+      "gradientMode": "none",
+      "axisSoftMin": 0,
+      "axisPlacement": "auto"
+     },
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "vertical",
+    "stacking": "none",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 100,
+    "legend": {
+     "showLegend": true,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xField": "week"
+   }
+  },
+  {
+   "id": 10,
+   "type": "barchart",
+   "title": "Pipeline success rate per week",
+   "description": "Share of finished Bitbucket pipelines that succeeded, per complete week. Stopped or still-running pipelines are left out.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 21,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with recursive weeks(w) as (\n  select date_add(date_sub(date(date_add($__timeFrom(), interval 8 hour)), interval weekday(date_add($__timeFrom(), interval 8 hour)) day), interval if(weekday(date_add($__timeFrom(), interval 8 hour)) = 0 and time(date_add($__timeFrom(), interval 8 hour)) = '00:00:00', 0, 7) day)\n  union all\n  select date_add(w, interval 7 day) from weeks\n  where date_add(w, interval 7 day) <= date_sub(date_sub(date(date_add($__timeTo(), interval 8 hour)), interval weekday(date_add($__timeTo(), interval 8 hour)) day), interval 7 day)\n),\n_c as (\n  select p.finished_date, p.result from cicd_pipelines p\n  join project_mapping pm on pm.row_id = p.cicd_scope_id and pm.`table` = 'cicd_scopes'\n  where pm.project_name in (${project:sqlstring}) and p.cicd_scope_id in (${repo:sqlstring}) and p.result in ('SUCCESS', 'FAILURE')\n    and $__timeFilter(p.finished_date)\n)\nselect date_format(w, '%d %b') as week,\n  round(100 * sum(_c.result = 'SUCCESS') / nullif(count(_c.result), 0)) as `Succeeded %`\nfrom weeks left join _c on date_sub(date(date_add(_c.finished_date, interval 8 hour)), interval weekday(date_add(_c.finished_date, interval 8 hour)) day) = w\ngroup by w order by w"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "palette-classic"
+     },
+     "custom": {
+      "fillOpacity": 85,
+      "lineWidth": 0,
+      "gradientMode": "none",
+      "axisSoftMin": 0,
+      "axisPlacement": "auto"
+     },
+     "unit": "percent",
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "orientation": "vertical",
+    "stacking": "none",
+    "showValue": "auto",
+    "groupWidth": 0.7,
+    "barWidth": 0.9,
+    "xTickLabelRotation": 0,
+    "xTickLabelSpacing": 100,
+    "legend": {
+     "showLegend": false,
+     "displayMode": "list",
+     "placement": "bottom"
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    },
+    "xField": "week"
+   }
+  },
+  {
+   "id": 11,
+   "type": "table",
+   "title": "By repository",
+   "description": "Per repository in the range: production deployments and deploy days, median lead time for pull requests deployed (not linked: no merged PR was matched to a production deployment), pull requests merged, and the share of finished pipelines that succeeded. Repositories with no activity in the range are left out.",
+   "datasource": {
+    "type": "mysql",
+    "uid": "devlake-mysql-api"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 29,
+    "w": 24,
+    "h": 19
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "mysql",
+      "uid": "devlake-mysql-api"
+     },
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code",
+     "rawSql": "with _d as (\n  select cdc.cicd_deployment_id as id, max(cdc.finished_date) as fin,\n         max(cdc.original_environment) as env, max(cdc.cicd_scope_id) as scope\n  from cicd_deployment_commits cdc\n  join project_mapping pm on cdc.cicd_scope_id = pm.row_id and pm.`table` = 'cicd_scopes'\n  where pm.project_name in (${project:sqlstring}) and cdc.cicd_scope_id in (${repo:sqlstring})\n    and cdc.result = 'SUCCESS' and cdc.environment = 'PRODUCTION'\n  group by 1\n  having $__timeFilter(max(cdc.finished_date))\n), _p as (\n  select distinct pr.id, pr.base_repo_id as repo, ppm.pr_cycle_time, ppm.pr_coding_time, ppm.pr_pickup_time,\n         ppm.pr_review_time, ppm.pr_deploy_time, timestampdiff(minute, pr.created_date, pr.merged_date) as pr_open_time,\n         cdc.finished_date as fin\n  from pull_requests pr\n  join project_pr_metrics ppm on ppm.id = pr.id\n  join project_mapping pm on pr.base_repo_id = pm.row_id and pm.`table` = 'repos'\n  join cicd_deployment_commits cdc on ppm.deployment_commit_id = cdc.id\n  where pm.project_name in (${project:sqlstring}) and pr.base_repo_id in (${repo:sqlstring}) and pr.author_id in (${author:sqlstring})\n    and pr.merged_date is not null and ppm.pr_cycle_time is not null\n    and $__timeFilter(cdc.finished_date)\n),\n_lr as (select repo, pr_cycle_time, percent_rank() over (partition by repo order by pr_cycle_time) as rk from _p),\n_lt as (select repo, max(pr_cycle_time) as med from _lr where rk <= 0.5 group by repo),\n_dep as (select scope, count(*) as n, count(distinct date(date_add(fin, interval 8 hour))) as days, max(fin) as last from _d group by scope),\n_mer as (select base_repo_id as repo, count(*) as n from pull_requests\n         where merged_date is not null and author_id in (${author:sqlstring}) and $__timeFilter(merged_date) group by 1),\n_ci as (select cicd_scope_id as scope, if(count(*) < 5, null, round(100 * sum(result = 'SUCCESS') / count(*))) as ok, count(*) as runs from cicd_pipelines\n        where result in ('SUCCESS', 'FAILURE') and $__timeFilter(finished_date) group by 1)\nselect substring_index(r.name, '/', -1) as Repository,\n  coalesce(_dep.n, 0) as `Production deploys`, coalesce(_dep.days, 0) as `Deploy days`,\n  _lt.med as `Median lead time`, coalesce(_mer.n, 0) as `PRs merged`, _ci.ok as `Pipeline success`,\n  _dep.last as `Last production deploy`\nfrom repos r\njoin project_mapping pm on pm.row_id = r.id and pm.`table` = 'repos' and pm.project_name in (${project:sqlstring})\nleft join _dep on _dep.scope = r.id left join _lt on _lt.repo = r.id\nleft join _mer on _mer.repo = r.id left join _ci on _ci.scope = r.id\nwhere r.id in (${repo:sqlstring}) and (_dep.n is not null or _mer.n is not null or _ci.runs is not null)\norder by 2 desc, 5 desc"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "filterable": false
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Median lead time"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "m"
+       },
+       {
+        "id": "decimals",
+        "value": 1
+       },
+       {
+        "id": "noValue",
+        "value": "not linked"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Pipeline success"
+      },
+      "properties": [
+       {
+        "id": "noValue",
+        "value": "under 5 runs"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Pipeline success"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "percent"
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Last production deploy"
+      },
+      "properties": [
+       {
+        "id": "unit",
+        "value": "dateTimeFromNow"
+       },
+       {
+        "id": "noValue",
+        "value": "none in range"
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "sortBy": [
+     {
+      "displayName": "Production deploys",
+      "desc": true
+     }
+    ],
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "fields": ""
+    }
+   }
+  }
+ ]
+}
