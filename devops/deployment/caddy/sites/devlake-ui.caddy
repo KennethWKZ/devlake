@@ -1,0 +1,5 @@
+# config-ui, which also serves Grafana under /grafana.
+# Set Grafana's GF_SERVER_ROOT_URL to https://<DEVLAKE_UI_HOST>/grafana.
+{$DEVLAKE_UI_HOST} {
+	reverse_proxy {$DEVLAKE_UI_UPSTREAM:127.0.0.1:4000}
+}
