@@ -1,0 +1,32 @@
+# Caddy as the HTTPS front door for DevLake (and optionally an OTel Collector).
+# Runs as its own compose project next to DevLake's:
+#   cp .env.example .env && cp aws-config.example aws-config   # then edit both
+#   docker build -t "$CADDY_IMAGE" .
+#   docker compose up -d
+# Host networking: Caddy binds 443 on the host and reaches DevLake's published ports on
+# 127.0.0.1, and the AWS SDK reaches the EC2 instance metadata service with hop limit 1.
+services:
+  caddy:
+    image: ${CADDY_IMAGE:-devlake-caddy:2.11.9-route53-1.6.3}
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      AWS_CONFIG_FILE: /etc/caddy/aws-config
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - ./aws-config:/etc/caddy/aws-config:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  # Holds the issued certificates and ACME account: keep it, or every restart requests
+  # new certificates and runs into Let's Encrypt rate limits.
+  caddy-data:
+  caddy-config:

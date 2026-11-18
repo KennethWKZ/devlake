@@ -1,0 +1,7 @@
+# Copy to aws-config. The DNS provider assumes a role that can only write the
+# _acme-challenge TXT records, using the EC2 instance role as the source credentials.
+# A separate role keeps that permission off an instance role other hosts may share.
+[profile acme]
+role_arn = arn:aws:iam::123456789012:role/devlake-caddy-acme
+credential_source = Ec2InstanceMetadata
+region = us-east-1

@@ -1,0 +1,20 @@
+# OTLP/HTTP ingest for an OpenTelemetry Collector (for example Claude Code telemetry).
+# Only POST /v1/metrics and POST /v1/logs pass; everything else gets 404.
+# Authentication stays in the collector (for example bearertokenauth on the receiver);
+# Caddy forwards the Authorization header unchanged.
+# Add /v1/traces to the path list only if the collector should take traces.
+{$OTEL_HOST} {
+	@otlp {
+		method POST
+		path /v1/metrics /v1/logs
+	}
+	handle @otlp {
+		request_body {
+			max_size {$OTEL_MAX_BODY:20MB}
+		}
+		reverse_proxy {$OTEL_UPSTREAM:127.0.0.1:4319}
+	}
+	handle {
+		respond 404
+	}
+}
