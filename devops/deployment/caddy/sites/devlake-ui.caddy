@@ -1,5 +1,17 @@
 # config-ui, which also serves Grafana under /grafana.
-# Set Grafana's GF_SERVER_ROOT_URL to https://<DEVLAKE_UI_HOST>/grafana.
+# Set Grafana's GF_SERVER_ROOT_URL to https://<DEVLAKE_UI_HOST>/grafana (and GF_SERVER_SERVE_FROM_SUB_PATH=true).
 {$DEVLAKE_UI_HOST} {
-	reverse_proxy {$DEVLAKE_UI_UPSTREAM:127.0.0.1:4000}
+	# Grafana API calls with a token (service account: "Authorization: Bearer glsa_...") go straight to Grafana:
+	# config-ui's nginx clears the Authorization header on /grafana/, so tokens cannot pass through it.
+	# Browser traffic and config-ui's basic auth are unchanged. Grafana checks the token itself.
+	@grafana_token {
+		path /grafana/api/*
+		header Authorization "Bearer *"
+	}
+	handle @grafana_token {
+		reverse_proxy {$GRAFANA_UPSTREAM:127.0.0.1:3002}
+	}
+	handle {
+		reverse_proxy {$DEVLAKE_UI_UPSTREAM:127.0.0.1:4000}
+	}
 }
