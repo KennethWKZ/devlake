@@ -86,22 +86,20 @@ log "profile=${AWS_PROFILE} account=${ACCOUNT_ID} region=${AWS_REGION}"
 log "registry=${REGISTRY}"
 log "tag=${TAG} sha=${SHA} platform=${DOCKER_DEFAULT_PLATFORM}"
 
-# --- ensure ECR repositories exist ------------------------------------------
-ensure_repo() {
+# --- check the ECR repositories exist ---------------------------------------
+# The repositories (and their lifecycle policy) are infrastructure as code,
+# managed outside this script. It never creates them: a repository made here
+# would be missing that config and conflict with the code that owns it.
+require_repo() {
   local repo="$1"
-  if aws ecr describe-repositories --repository-names "${repo}" \
-        --profile "${AWS_PROFILE}" --region "${AWS_REGION}" >/dev/null 2>&1; then
-    log "ecr repo exists: ${repo}"
-  else
-    log "creating ecr repo: ${repo}"
-    aws ecr create-repository --repository-name "${repo}" \
-      --image-scanning-configuration scanOnPush=true \
-      --profile "${AWS_PROFILE}" --region "${AWS_REGION}" >/dev/null
-  fi
+  aws ecr describe-repositories --repository-names "${repo}" \
+      --profile "${AWS_PROFILE}" --region "${AWS_REGION}" >/dev/null 2>&1 \
+    || die "ecr repo '${repo}' not found in ${AWS_REGION}: create it through the infrastructure code first (this script never creates repositories)"
+  log "ecr repo exists: ${repo}"
 }
-ensure_repo "${SERVER_REPO}"
-ensure_repo "${UI_REPO}"
-ensure_repo "${DASHBOARD_REPO}"
+require_repo "${SERVER_REPO}"
+require_repo "${UI_REPO}"
+require_repo "${DASHBOARD_REPO}"
 
 # --- docker login to ECR ----------------------------------------------------
 log "logging in to ECR"
